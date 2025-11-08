@@ -76,7 +76,19 @@ public class MainView {
         if (ultimaPastaOrigem != null) {
             filaConversao.clear();
             for (File f : Conversor.listarArquivosMKV(ultimaPastaOrigem)) {
-                filaConversao.add(new ConversaoItem(f.getName(), f.getAbsolutePath(), null));
+                ConversaoItem item = new ConversaoItem(f.getName(), f.getAbsolutePath(), null);
+                // Verifica se o arquivo convertido já existe na pasta de destino
+                if (pastaDestino != null) {
+                    String nomeBase = f.getName().replaceFirst("\\.mkv$", "");
+                    File convertido = new File(pastaDestino, nomeBase + ".mp4");
+                    if (convertido.exists()) {
+                        item.setStatus(StatusConversao.CONCLUIDO);
+                        item.setProgresso(1.0);
+                        item.setTempoEstimado("Concluído");
+                        item.setCaminhoDestino(convertido.getAbsolutePath());
+                    }
+                }
+                filaConversao.add(item);
             }
             listaArquivos.getItems().setAll(filaConversao);
             txtArquivos.setText(ultimaPastaOrigem.getAbsolutePath());
