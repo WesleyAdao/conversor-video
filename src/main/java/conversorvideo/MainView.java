@@ -189,9 +189,40 @@ public class MainView {
                 String nomeBase = item.getNomeArquivo().replaceFirst("\\.mkv$", "");
                 File destino = new File(pastaDestino, nomeBase + ".mp4");
                 item.setCaminhoDestino(destino.getAbsolutePath());
+                final long tempoInicio = System.currentTimeMillis();
+                final int janela = 10;
+                final double[] progressoJanela = new double[janela];
+                final long[] tempoJanela = new long[janela];
+                final int[] idx = {0};
+                final int[] totalAmostras = {0};
                 boolean sucesso = Conversor.converterArquivoComProgresso(item, destino, (progresso, tempoEstimado) -> {
                     item.setProgresso(progresso);
-                    item.setTempoEstimado(tempoEstimado);
+                    long tempoDecorrido = System.currentTimeMillis() - tempoInicio;
+                    progressoJanela[idx[0]] = progresso;
+                    tempoJanela[idx[0]] = tempoDecorrido;
+                    idx[0] = (idx[0] + 1) % janela;
+                    if (totalAmostras[0] < janela) totalAmostras[0]++;
+                    String tempoStr;
+                    if (totalAmostras[0] > 2 && progresso > 0.05) { // Exibe estimativa com pelo menos 3 amostras
+                        double somaProgresso = 0.0;
+                        long somaTempo = 0;
+                        for (int i = 0; i < totalAmostras[0]; i++) {
+                            somaProgresso += progressoJanela[i];
+                            somaTempo += tempoJanela[i];
+                        }
+                        double mediaProgresso = somaProgresso / totalAmostras[0];
+                        long mediaTempo = somaTempo / totalAmostras[0];
+                        long tempoTotalEstimado = (long) (mediaTempo / mediaProgresso);
+                        long tempoRestante = tempoTotalEstimado - tempoDecorrido;
+                        if (tempoRestante < 0 || progresso >= 0.99) {
+                            tempoStr = "Concluindo...";
+                        } else {
+                            tempoStr = formatarTempo(tempoRestante);
+                        }
+                    } else {
+                        tempoStr = "Calculando...";
+                    }
+                    item.setTempoEstimado(tempoStr);
                     Platform.runLater(listaArquivos::refresh);
                 });
                 if (sucesso) {
@@ -231,6 +262,22 @@ public class MainView {
                 alert.setContentText("Não foi possível abrir a pasta de destino.");
                 alert.showAndWait();
             }
+        }
+    }
+
+    // Adiciona método utilitário para formatar tempo
+    private String formatarTempo(long millis) {
+        long segundos = millis / 1000;
+        long minutos = segundos / 60;
+        long horas = minutos / 60;
+        segundos = segundos % 60;
+        minutos = minutos % 60;
+        if (horas > 0) {
+            return String.format("%dh %02dm %02ds", horas, minutos, segundos);
+        } else if (minutos > 0) {
+            return String.format("%dm %02ds", minutos, segundos);
+        } else {
+            return String.format("%ds", segundos);
         }
     }
 }
