@@ -14,7 +14,7 @@ public class ConversaoItem {
         this.caminhoDestino = caminhoDestino;
         this.progresso = 0.0;
         this.tempoEstimado = "--";
-        this.status = StatusConversao.AGUARDANDO;
+        this.status = StatusConversao.DISPONIVEL;
     }
 
     public String getNomeArquivo() { return nomeArquivo; }
@@ -28,4 +28,3 @@ public class ConversaoItem {
     public StatusConversao getStatus() { return status; }
     public void setStatus(StatusConversao status) { this.status = status; }
 }
-

@@ -1,5 +1,6 @@
 package conversorvideo;
 
+import conversorvideo.Conversor;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.scene.Scene;
@@ -28,7 +29,6 @@ public class MainView {
     private final ListView<ConversaoItem> listaArquivos = new ListView<>();
     private final Button btnConverter = new Button("Converter");
     private final Button btnAbrirDestino = new Button("Abrir Pasta de Destino");
-    private final Button btnCancelar = new Button("Cancelar Conversão");
     private final Label lblStatus = new Label();
     private final TextField txtDestino = new TextField();
     private final TextField txtArquivos = new TextField();
@@ -41,7 +41,6 @@ public class MainView {
         btnSelecionarArquivos.setOnAction(e -> selecionarArquivos(stage));
         btnSelecionarPasta.setOnAction(e -> selecionarPasta(stage));
         btnConverter.setOnAction(e -> iniciarConversao());
-        btnCancelar.setOnAction(e -> cancelarConversao());
         btnAbrirDestino.setOnAction(e -> abrirPastaDestino());
         txtDestino.setEditable(false);
         txtDestino.setPromptText("Selecione a pasta de destino...");
@@ -54,11 +53,26 @@ public class MainView {
             txtDestino.setText(pastaDestino.getAbsolutePath());
         }
         listaArquivos.setCellFactory(param -> new ListCell<>() {
-            private final ProgressBar barra = new ProgressBar(0);
             private final Label lblNome = new Label();
+            private final ProgressBar barra = new ProgressBar(0);
             private final Label lblPorcentagem = new Label();
             private final Label lblTempo = new Label();
-            private final HBox hBox = new HBox(10, lblNome, barra, lblPorcentagem, lblTempo);
+            private final Button btnCancelarItem = new Button("Cancelar");
+            private final Region spacerLeft = new Region();
+            private final Region spacerRight = new Region();
+            private final HBox hBox = new HBox(10, lblNome, spacerLeft, lblTempo, spacerRight, btnCancelarItem);
+            private final Label lblStatus = new Label();
+            {
+                HBox.setHgrow(spacerLeft, Priority.ALWAYS);
+                HBox.setHgrow(spacerRight, Priority.ALWAYS);
+                btnCancelarItem.setStyle("-fx-background-color: #F44336; -fx-text-fill: white;");
+                btnCancelarItem.setOnAction(e -> {
+                    ConversaoItem item = getItem();
+                    if (item != null && item.getStatus() == StatusConversao.CONVERTENDO) {
+                        Conversor.solicitarCancelamentoItem(item);
+                    }
+                });
+            }
             @Override
             protected void updateItem(ConversaoItem item, boolean empty) {
                 super.updateItem(item, empty);
@@ -66,10 +80,21 @@ public class MainView {
                     setGraphic(null);
                 } else {
                     lblNome.setText(item.getNomeArquivo());
+                    lblTempo.setText(item.getTempoEstimado());
+                    btnCancelarItem.setVisible(item.getStatus() == StatusConversao.CONVERTENDO);
+                    String statusStr;
+                    switch (item.getStatus()) {
+                        case DISPONIVEL: statusStr = "Disponível"; break;
+                        case CANCELADO: statusStr = "Cancelado"; break;
+                        case CONCLUIDO: statusStr = "Concluído"; break;
+                        case CONVERTENDO: statusStr = "Convertendo"; break;
+                        case FALHA: statusStr = "Falha"; break;
+                        default: statusStr = ""; break;
+                    }
+                    lblStatus.setText(statusStr);
+                    setGraphic(new VBox(5, hBox, new HBox(10, barra, lblPorcentagem, lblStatus)));
                     barra.setProgress(item.getProgresso());
                     lblPorcentagem.setText(String.format("%.0f%%", item.getProgresso() * 100));
-                    lblTempo.setText(item.getTempoEstimado());
-                    setGraphic(hBox);
                 }
             }
         });
@@ -96,14 +121,12 @@ public class MainView {
         // Ativa o botão Converter se já houver arquivos e pasta de destino
         btnConverter.setDisable(pastaDestino == null || filaConversao.isEmpty());
         btnConverter.setStyle("-fx-background-color: #4CAF50; -fx-text-fill: white;");
-        btnCancelar.setStyle("-fx-background-color: #F44336; -fx-text-fill: white;");
-        btnCancelar.setDisable(true);
         btnAbrirDestino.setDisable(true);
         VBox root = new VBox(10,
             listaArquivos,
             new HBox(10, btnSelecionarArquivos, txtArquivos),
             new HBox(10, btnSelecionarPasta, txtDestino),
-            new HBox(10, btnConverter, btnCancelar),
+            new HBox(10, btnConverter),
             btnAbrirDestino,
             lblStatus
         );
@@ -191,7 +214,6 @@ public class MainView {
             return;
         }
         btnConverter.setDisable(true);
-        btnCancelar.setDisable(false);
         lblStatus.setText("Convertendo...");
         new Thread(() -> {
             for (ConversaoItem item : filaConversao) {
@@ -251,16 +273,10 @@ public class MainView {
                 lblStatus.setText("");
                 btnConverter.setDisable(false);
                 btnAbrirDestino.setDisable(false);
-                btnCancelar.setDisable(true);
             });
         }).start();
     }
 
-    private void cancelarConversao() {
-        Conversor.solicitarCancelamento();
-        lblStatus.setText("Cancelando conversão...");
-        btnCancelar.setDisable(true);
-    }
 
     private void abrirPastaDestino() {
         if (pastaDestino != null) {

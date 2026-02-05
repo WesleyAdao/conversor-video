@@ -1,6 +1,11 @@
-conversorvideo\Main.class
-conversorvideo\MainView$1.class
 conversorvideo\Conversor.class
 conversorvideo\MainView.class
 conversorvideo\Conversor$ConversaoListener.class
+conversorvideo\MainView$2.class
+conversorvideo\Main.class
+conversorvideo\MainView$1.class
+conversorvideo\StatusConversao.class
+conversorvideo\Conversor$ProgressoListener.class
+conversorvideo\Constantes.class
 conversorvideo\Conversor$LogConversao.class
+conversorvideo\ConversaoItem.class
