@@ -9,9 +9,11 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import conversorvideo.ConversaoItem;
 import java.nio.file.Paths;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class Conversor {
     private static volatile boolean cancelar = false;
+    private static final ConcurrentHashMap<ConversaoItem, Process> processosPorItem = new ConcurrentHashMap<>();
     private static String ffmpegPath = null;
 
     /**
@@ -78,57 +80,20 @@ public class Conversor {
         }
     }
 
-    public static List<File> listarArquivosMKV(File pastaOrigem) {
-        List<File> arquivos = new ArrayList<>();
-        File[] files = pastaOrigem.listFiles();
-        if (files != null) {
-            for (File f : files) {
-                if (f.isFile() && f.getName().toLowerCase().endsWith(".mkv")) {
-                    arquivos.add(f);
-                }
+    public static void solicitarCancelamentoItem(ConversaoItem item) {
+        Process processo = processosPorItem.get(item);
+        if (processo != null) {
+            processo.destroy();
+            processosPorItem.remove(item);
+            // Exclui arquivo de destino incompleto
+            if (item.getCaminhoDestino() != null) {
+                File destino = new File(item.getCaminhoDestino());
+                if (destino.exists()) destino.delete();
             }
+            item.setStatus(StatusConversao.CANCELADO);
+            item.setProgresso(0.0);
+            item.setTempoEstimado("");
         }
-        return arquivos;
-    }
-
-    public static List<LogConversao> converterArquivos(List<File> arquivos, File pastaDestino, ConversaoListener listener) {
-        resetarCancelamento();
-        List<LogConversao> logs = new ArrayList<>();
-        long tempoTotal = 0;
-        int arquivosConvertidos = 0;
-        for (File arquivo : arquivos) {
-            if (cancelar) {
-                logs.add(new LogConversao(arquivo.getName(), false, "Conversão cancelada pelo usuário."));
-                break;
-            }
-            String nomeBase = arquivo.getName().replaceFirst("\\.mkv$", "");
-            File destino = new File(pastaDestino, nomeBase + ".mp4");
-            long inicio = System.currentTimeMillis();
-            try {
-                ProcessBuilder pb = new ProcessBuilder(
-                    getFfmpegPath(),
-                    "-i", arquivo.getAbsolutePath(),
-                    "-c:v", "copy",
-                    "-c:a", "copy",
-                    destino.getAbsolutePath()
-                );
-                pb.redirectErrorStream(true);
-                Process processo = pb.start();
-                processo.waitFor();
-                long fim = System.currentTimeMillis();
-                tempoTotal += (fim - inicio);
-                long tempoMedio = arquivosConvertidos > 0 ? tempoTotal / arquivosConvertidos : 0;
-                long tempoRestante = tempoMedio * (arquivos.size() - arquivosConvertidos);
-                listener.onProgresso(destino.getName(), (int) (((arquivosConvertidos + 1) * 100) / arquivos.size()), tempoMedio, tempoRestante);
-                listener.onFinalizado(destino.getName());
-                arquivosConvertidos++;
-                logs.add(new LogConversao(destino.getName(), true, null));
-            } catch (Exception e) {
-                listener.onErro(arquivo.getName(), e.getMessage());
-                logs.add(new LogConversao(arquivo.getName(), false, e.getMessage()));
-            }
-        }
-        return logs;
     }
 
     public static boolean converterArquivoComProgresso(ConversaoItem item, File destino, ProgressoListener listener) {
@@ -143,6 +108,7 @@ public class Conversor {
             );
             pb.redirectErrorStream(true);
             Process processo = pb.start();
+            processosPorItem.put(item, processo);
             BufferedReader reader = new BufferedReader(new InputStreamReader(processo.getInputStream()));
             String linha;
             double duracaoTotal = 0;
@@ -170,14 +136,19 @@ public class Conversor {
                     String tempoEstimado = formatarTempo((int)(duracaoTotal - tempoAtual));
                     listener.onProgresso(progresso, tempoEstimado);
                 }
-                if (cancelar) {
+                if (cancelar || Thread.currentThread().isInterrupted()) {
                     processo.destroy();
+                    processosPorItem.remove(item);
+                    if (destino.exists()) destino.delete();
                     return false;
                 }
             }
             int exit = processo.waitFor();
+            processosPorItem.remove(item);
             return exit == 0;
         } catch (Exception e) {
+            processosPorItem.remove(item);
+            if (destino.exists()) destino.delete();
             return false;
         }
     }
@@ -194,5 +165,18 @@ public class Conversor {
         } else {
             return String.format("%ds", seg);
         }
+    }
+
+    public static List<File> listarArquivosMKV(File pastaOrigem) {
+        List<File> arquivos = new ArrayList<>();
+        File[] files = pastaOrigem.listFiles();
+        if (files != null) {
+            for (File f : files) {
+                if (f.isFile() && f.getName().toLowerCase().endsWith(".mkv")) {
+                    arquivos.add(f);
+                }
+            }
+        }
+        return arquivos;
     }
 }

@@ -1,9 +1,9 @@
 package conversorvideo;
 
 public enum StatusConversao {
-    AGUARDANDO,
+    DISPONIVEL,
     CONVERTENDO,
     CONCLUIDO,
+    CANCELADO,
     FALHA
 }
-
